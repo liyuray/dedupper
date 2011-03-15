@@ -87,9 +87,10 @@ $csv->eof or $csv->error_diag ();
 close $fh;
 
 my @list;
+print Dumper($phoneh{'+886932064178'});
 PHONE:
 for my $phone (keys %phoneh) {
-    next if all {not defined $iter{$_}} @{$phoneh{$phone}};
+#    next if all {not defined $iter{$_}} @{$phoneh{$phone}};
     my @entry;
     push @entry, $_ for (grep {defined $iter{$_}} @{$phoneh{$phone}});
     delete $iter{$_} for (grep {defined $iter{$_}} @{$phoneh{$phone}});
@@ -109,7 +110,7 @@ for my $phone (keys %phoneh) {
 }
 
 EMAIL:
-for my $email (keys %emailh) {
+while (0) {my $email; #for my $email (keys %emailh) {
     next if all {not defined $iter{$_}} @{$emailh{$email}};
     my @entry;
     my @emails = grep {defined $iter{$_}} @{$emailh{$email}};
@@ -128,12 +129,20 @@ for my $email (keys %emailh) {
 
 }
 
+my @result;
 for my $entry (@list) {
-    my (@phones, @emails, @names);
+    my (@phones, @emails, @names, @lines);
+    @lines = @{$entry};
     push @phones, @{$line_hash{$_}{phones}} for @{$entry};
     push @emails, @{$line_hash{$_}{emails}} for @{$entry};
     push @names, @{$line_hash{$_}{names}} for @{$entry};
-    print uniq @names, uniq @emails, uniq @phones;
+#    print scalar @lines, @lines, uniq @names, uniq @emails, uniq @phones;
+    push @result, [scalar @lines, @lines, uniq @names, uniq @emails, uniq @phones];
+}
+
+@result = sort {$b->[0] cmp $a->[0]} @result;
+for my $item (@result) {
+    print @{$item};
 }
 
 print scalar @list;
