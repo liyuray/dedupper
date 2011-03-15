@@ -4,7 +4,9 @@ use Text::CSV_XS;
 use List::MoreUtils qw(all any uniq);
 use Data::Dumper;
 use warnings NONFATAL => 'all', FATAL => 'uninitialized';
-
+use Carp;
+$SIG{__DIE__}  = sub { Carp::confess(@_) };
+$SIG{__WARN__} = sub { Carp::cluck(@_) };
 binmode STDOUT, 'utf8';
 
 local $, = ',';
@@ -69,6 +71,10 @@ while (my $row = $csv->getline_hr ($fh)) {
         push @phones, @phones_items;
     }
     my @names = map {$row->{$_}} grep {defined $row->{$_}} @name_fields;
+
+    # each phone number can find it's containing line numbers in %phoneh.
+    # each line number can find it's contained phone numbers in %line_hash.
+    #
     push @{$phoneh{$_}}, $line_num foreach (@phones);
     push @{$emailh{$_}}, $line_num foreach (@emails);
     $iter{$line_num}++;
@@ -78,55 +84,37 @@ while (my $row = $csv->getline_hr ($fh)) {
         phones => \@phones,
         row => $row,
     };
-
-#    print @names,
-#        @emails,
-#            @phones, values %{$row};
 }
 $csv->eof or $csv->error_diag ();
 close $fh;
 
 my @list;
-print Dumper($phoneh{'+886932064178'});
-PHONE:
-for my $phone (keys %phoneh) {
-#    next if all {not defined $iter{$_}} @{$phoneh{$phone}};
+#print Dumper($phoneh{'+886932064178'});
+#for my $phone (('+886932064178', keys %phoneh)) {
+my $list_num;
+while ( $line_num = [sort {$a <=> $b} keys %iter]->[0]) {
+#    print "line_num=$line_num";
+    #    delete $iter{$line_num};
     my @entry;
-    push @entry, $_ for (grep {defined $iter{$_}} @{$phoneh{$phone}});
-    delete $iter{$_} for (grep {defined $iter{$_}} @{$phoneh{$phone}});
-  LINE_NUM1:
-    for my $line_num (@{$phoneh{$phone}}) {
-        next LINE_NUM1 unless defined $iter{$line_num};
-        for my $phone_inner (@{$iter{$line_num}{phones}}) {
-            push @entry, $_ for (grep {defined $iter{$_}} @{$phoneh{$phone_inner}});
-                delete $iter{$_} for (grep {defined $iter{$_}} @{$phoneh{$phone_inner}});
-        }
+    my %queue;
+    $queue{$line_num}++;
+    my $i;
+    while ($i = [sort {$a <=> $b} keys %queue]->[0]) {
+        #    while ([sort {$a <=> $b} keys %iter]->[0]) {
+        #        print "i=$i";
+        delete $queue{$i};
+        push @entry, $i;
+        delete $iter{$i};
+        my @phones = @{$line_hash{$i}{phones}};
+        my @emails = @{$line_hash{$i}{emails}};
+        my @queue1;
+        push @queue1, grep {defined $iter{$_}} @{$phoneh{$_}} for @phones;
+        push @queue1, grep {defined $iter{$_}} @{$emailh{$_}} for @emails;
+        @queue1 = uniq sort {$a <=> $b} @queue1;
+#        print @queue1;
+        $queue{$_}++ for @queue1;
     }
     push @list, \@entry;
-#    for (@entry) {
-#        next PHONE if $_->{phones} and $_->{emails};
-#    }
-#    print $phone, $/, Dumper($phoneh{$phone}, \@entry);
-}
-
-EMAIL:
-while (0) {my $email; #for my $email (keys %emailh) {
-    next if all {not defined $iter{$_}} @{$emailh{$email}};
-    my @entry;
-    my @emails = grep {defined $iter{$_}} @{$emailh{$email}};
-    push @entry, $_ for @emails;
-    delete $iter{$_} for @emails;
-  LINE_NUM2:
-    for my $line_num (@{$emailh{$email}}) {
-        next LINE_NUM2 unless defined $iter{$line_num};
-        for my $email_inner (@{$iter{$line_num}{emails}}) {
-            push @entry, $_ for (grep {defined $iter{$_}} @{$emailh{$email_inner}});
-            delete $iter{$_} for (grep {defined $iter{$_}} @{$emailh{$email_inner}});
-        }
-    }
-    push @list, \@entry;
-    #    delete $iter{$_} for (@{$emailh{$email}});
-
 }
 
 my @result;
@@ -146,8 +134,7 @@ for my $item (@result) {
 }
 
 print scalar @list;
-#Dumper(\@list);
-#print Dumper(\@list);
+print Dumper(\@list);
 print Dumper(\%iter);
 __END__
 
