@@ -97,7 +97,7 @@ for my $phone (keys %phoneh) {
     for my $line_num (@{$phoneh{$phone}}) {
         next LINE_NUM1 unless defined $iter{$line_num};
         for my $phone_inner (@{$iter{$line_num}{phones}}) {
-            push @entry, $iter{$_} for (grep {defined $iter{$_}} @{$phoneh{$phone_inner}});
+            push @entry, $_ for (grep {defined $iter{$_}} @{$phoneh{$phone_inner}});
                 delete $iter{$_} for (grep {defined $iter{$_}} @{$phoneh{$phone_inner}});
         }
     }
@@ -113,13 +113,13 @@ for my $email (keys %emailh) {
     next if all {not defined $iter{$_}} @{$emailh{$email}};
     my @entry;
     my @emails = grep {defined $iter{$_}} @{$emailh{$email}};
-    push @entry, $iter{$_} for @emails;
+    push @entry, $_ for @emails;
     delete $iter{$_} for @emails;
   LINE_NUM2:
     for my $line_num (@{$emailh{$email}}) {
         next LINE_NUM2 unless defined $iter{$line_num};
         for my $email_inner (@{$iter{$line_num}{emails}}) {
-            push @entry, $iter{$_} for (grep {defined $iter{$_}} @{$emailh{$email_inner}});
+            push @entry, $_ for (grep {defined $iter{$_}} @{$emailh{$email_inner}});
             delete $iter{$_} for (grep {defined $iter{$_}} @{$emailh{$email_inner}});
         }
     }
