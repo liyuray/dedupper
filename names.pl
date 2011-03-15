@@ -2,6 +2,9 @@ use warnings;
 use strict;
 use Text::CSV_XS;
 use List::MoreUtils qw(all any uniq);
+use Data::Dumper;
+use warnings NONFATAL => 'all', FATAL => 'uninitialized';
+
 binmode STDOUT, 'utf8';
 
 local $, = ',';
@@ -30,16 +33,23 @@ ENDNAME
 my @phone_list;
 my @name_list;
 my @rows;
+my $line_num;
 my $csv = Text::CSV_XS->new ({ binary => 1, eol => $/ })
     or die "Cannot use CSV: ".Text::CSV->error_diag ();
 open my $fh, "<:encoding(utf16-le)", "test.csv" or die "test.csv: $!";
 $csv->column_names ($csv->getline ($fh));
+my %phoneh;
+my %emailh;
+my %line_hash;
+my %iter;
 ROW:
 while (my $row = $csv->getline_hr ($fh)) {
-    next if any { $row->{$_} =~ /\d/ } @phone_fields;
-    next if any { $row->{$_} =~ /\@/ } @email_fields;
-#    next ROW if all { $row->{$_} !~ /\d/ } @phone_fields
-#        and all { $row->{$_} !~ /\@/ } @email_fields;
+    $line_num++;
+#    next if any { $row->{$_} =~ /\d/ } @phone_fields;
+    #    next if any { $row->{$_} =~ /\@/ } @email_fields;
+    # skip those with no phones and numbers.
+    next ROW if all { $row->{$_} !~ /\d/ } @phone_fields
+        and all { $row->{$_} !~ /\@/ } @email_fields;
     my (@emails, @phones);
     for (@email_fields) {
         my $item = $row->{$_};
@@ -59,17 +69,76 @@ while (my $row = $csv->getline_hr ($fh)) {
         push @phones, @phones_items;
     }
     my @names = map {$row->{$_}} grep {defined $row->{$_}} @name_fields;
-    print @names,
-        @emails,
-            @phones, values %{$row};
+    push @{$phoneh{$_}}, $line_num foreach (@phones);
+    push @{$emailh{$_}}, $line_num foreach (@emails);
+    $iter{$line_num}++;
+    $line_hash{$line_num} = {
+        names => \@names,
+        emails => \@emails,
+        phones => \@phones,
+        row => $row,
+    };
+
+#    print @names,
+#        @emails,
+#            @phones, values %{$row};
 }
-#print $.;
 $csv->eof or $csv->error_diag ();
 close $fh;
 
+my @list;
+PHONE:
+for my $phone (keys %phoneh) {
+    next if all {not defined $line_hash{$_}} @{$phoneh{$phone}};
+    my @entry;
+    push @entry, $line_hash{$_} for (grep {defined $line_hash{$_}} @{$phoneh{$phone}});
+    delete $line_hash{$_} for (grep {defined $line_hash{$_}} @{$phoneh{$phone}});
+  LINE_NUM1:
+    for my $line_num (@{$phoneh{$phone}}) {
+        next LINE_NUM1 unless defined $line_hash{$line_num};
+        for my $phone_inner (@{$line_hash{$line_num}{phones}}) {
+            push @entry, $line_hash{$_} for (grep {defined $line_hash{$_}} @{$phoneh{$phone_inner}});
+                delete $line_hash{$_} for (grep {defined $line_hash{$_}} @{$phoneh{$phone_inner}});
+        }
+    }
+    push @list, \@entry;
+#    for (@entry) {
+#        next PHONE if $_->{phones} and $_->{emails};
+#    }
+#    print $phone, $/, Dumper($phoneh{$phone}, \@entry);
+}
+
+EMAIL:
+for my $email (keys %emailh) {
+    next if all {not defined $line_hash{$_}} @{$emailh{$email}};
+    my @entry;
+    my @emails = grep {defined $line_hash{$_}} @{$emailh{$email}};
+    push @entry, $line_hash{$_} for @emails;
+    delete $line_hash{$_} for @emails;
+  LINE_NUM2:
+    for my $line_num (@{$emailh{$email}}) {
+        next LINE_NUM2 unless defined $line_hash{$line_num};
+        for my $email_inner (@{$line_hash{$line_num}{emails}}) {
+            push @entry, $line_hash{$_} for (grep {defined $line_hash{$_}} @{$emailh{$email_inner}});
+            delete $line_hash{$_} for (grep {defined $line_hash{$_}} @{$emailh{$email_inner}});
+        }
+    }
+    push @list, \@entry;
+    #    delete $line_hash{$_} for (@{$emailh{$email}});
+
+}
+
+for my $entry (@list) {
+    my (@phones, @emails, @names);
+    push @phones, @{$_->{phones}} for @{$entry};
+    push @emails, @{$_->{emails}} for @{$entry};
+    push @names, @{$_->{names}} for @{$entry};
+    print uniq @names, uniq @emails, uniq @phones;
+}
+
+print scalar @list;
+#Dumper(\@list);
+#print Dumper(\@list);
+print Dumper(\%line_hash);
 __END__
 
-$csv->eol ("\r\n");
-open $fh, ">:encoding(utf8)", "new.csv" or die "new.csv: $!";
-$csv->print ($fh, $_) for @rows;
-close $fh or die "new.csv: $!";
