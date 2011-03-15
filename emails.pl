@@ -12,7 +12,7 @@ my @phone_list;
 my @rows;
 my $csv = Text::CSV_XS->new ({ binary => 1, eol => $/ })
     or die "Cannot use CSV: ".Text::CSV->error_diag ();
-open my $fh, "<:encoding(utf8)", "test.csv" or die "test.csv: $!";
+open my $fh, "<:encoding(utf16-le)", "test.csv" or die "test.csv: $!";
 $csv->column_names ($csv->getline ($fh));
 ROW:
 while (my $row = $csv->getline_hr ($fh)) {
