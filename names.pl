@@ -89,16 +89,16 @@ close $fh;
 my @list;
 PHONE:
 for my $phone (keys %phoneh) {
-    next if all {not defined $line_hash{$_}} @{$phoneh{$phone}};
+    next if all {not defined $iter{$_}} @{$phoneh{$phone}};
     my @entry;
-    push @entry, $line_hash{$_} for (grep {defined $line_hash{$_}} @{$phoneh{$phone}});
-    delete $line_hash{$_} for (grep {defined $line_hash{$_}} @{$phoneh{$phone}});
+    push @entry, $_ for (grep {defined $iter{$_}} @{$phoneh{$phone}});
+    delete $iter{$_} for (grep {defined $iter{$_}} @{$phoneh{$phone}});
   LINE_NUM1:
     for my $line_num (@{$phoneh{$phone}}) {
-        next LINE_NUM1 unless defined $line_hash{$line_num};
-        for my $phone_inner (@{$line_hash{$line_num}{phones}}) {
-            push @entry, $line_hash{$_} for (grep {defined $line_hash{$_}} @{$phoneh{$phone_inner}});
-                delete $line_hash{$_} for (grep {defined $line_hash{$_}} @{$phoneh{$phone_inner}});
+        next LINE_NUM1 unless defined $iter{$line_num};
+        for my $phone_inner (@{$iter{$line_num}{phones}}) {
+            push @entry, $iter{$_} for (grep {defined $iter{$_}} @{$phoneh{$phone_inner}});
+                delete $iter{$_} for (grep {defined $iter{$_}} @{$phoneh{$phone_inner}});
         }
     }
     push @list, \@entry;
@@ -110,35 +110,35 @@ for my $phone (keys %phoneh) {
 
 EMAIL:
 for my $email (keys %emailh) {
-    next if all {not defined $line_hash{$_}} @{$emailh{$email}};
+    next if all {not defined $iter{$_}} @{$emailh{$email}};
     my @entry;
-    my @emails = grep {defined $line_hash{$_}} @{$emailh{$email}};
-    push @entry, $line_hash{$_} for @emails;
-    delete $line_hash{$_} for @emails;
+    my @emails = grep {defined $iter{$_}} @{$emailh{$email}};
+    push @entry, $iter{$_} for @emails;
+    delete $iter{$_} for @emails;
   LINE_NUM2:
     for my $line_num (@{$emailh{$email}}) {
-        next LINE_NUM2 unless defined $line_hash{$line_num};
-        for my $email_inner (@{$line_hash{$line_num}{emails}}) {
-            push @entry, $line_hash{$_} for (grep {defined $line_hash{$_}} @{$emailh{$email_inner}});
-            delete $line_hash{$_} for (grep {defined $line_hash{$_}} @{$emailh{$email_inner}});
+        next LINE_NUM2 unless defined $iter{$line_num};
+        for my $email_inner (@{$iter{$line_num}{emails}}) {
+            push @entry, $iter{$_} for (grep {defined $iter{$_}} @{$emailh{$email_inner}});
+            delete $iter{$_} for (grep {defined $iter{$_}} @{$emailh{$email_inner}});
         }
     }
     push @list, \@entry;
-    #    delete $line_hash{$_} for (@{$emailh{$email}});
+    #    delete $iter{$_} for (@{$emailh{$email}});
 
 }
 
 for my $entry (@list) {
     my (@phones, @emails, @names);
-    push @phones, @{$_->{phones}} for @{$entry};
-    push @emails, @{$_->{emails}} for @{$entry};
-    push @names, @{$_->{names}} for @{$entry};
+    push @phones, @{$line_hash{$_}{phones}} for @{$entry};
+    push @emails, @{$line_hash{$_}{emails}} for @{$entry};
+    push @names, @{$line_hash{$_}{names}} for @{$entry};
     print uniq @names, uniq @emails, uniq @phones;
 }
 
 print scalar @list;
 #Dumper(\@list);
 #print Dumper(\@list);
-print Dumper(\%line_hash);
+print Dumper(\%iter);
 __END__
 
