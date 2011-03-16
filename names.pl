@@ -121,6 +121,13 @@ for my $entry (@list) {
     @names = uniq @names;
     @emails = uniq @emails;
     @phones = uniq @phones;
+
+    my $best;
+    for (map {$names[$_]}(1..$#names)) {
+#        next unless defined $best;
+        $names[0] = $_, last if /^\p{Ideographic}\p{Ideographic}\p{Ideographic}$/;
+    }
+
     push @metaresult, {
         lines => \@lines,
         names => \@names,
@@ -149,7 +156,7 @@ sub format_entry {
 }
 
 #@metaresult = sort {scalar @{$b->{names}} cmp scalar @{$a->{names}}} @metaresult;
-@metaresult = sort {$a->{names}[0] cmp $b->{names}[0]} @metaresult;
+#@metaresult = sort {$a->{names}[0] cmp $b->{names}[0]} @metaresult;
 
 $csv->eol ("\r\n");
 open $fh, ">:encoding(UTF16)", "new.csv" or die "new.csv: $!";
