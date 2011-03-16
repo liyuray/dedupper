@@ -15,15 +15,21 @@ my @name_list;
 my @rows;
 my $line_num;
 
-my $csv = Text::CSV_XS->new ({ binary => 1, always_quote => 1 })
+my $csv = Text::CSV_XS->new ({ binary => 1, always_quote => 0, quote_space => 0 })
     or die "Cannot use CSV: ".Text::CSV->error_diag ();
 open my $fh, "<:encoding(UTF-16)", "test.csv" or die "test.csv: $!";
 
 my $column_names = $csv->getline($fh);
 $csv->column_names (@{$column_names});
 
-#print Dumper($column_names);
-#print @{$column_names};
+my %rev_col;
+my %column_of;
+#print $#{$column_names};
+
+$rev_col{$column_names->[$_]} = $_ for (0..$#{$column_names});
+$column_of{names} = $rev_col{Name};
+$column_of{emails} = $rev_col{'E-mail 1 - Type'};
+$column_of{phones} = $rev_col{'Phone 1 - Type'};
 
 my @email_fields = grep {/E\-mail \d+ \- Value/} @{$column_names};
 my @phone_fields = grep {/Phone \d+ \- Value/} @{$column_names};
@@ -142,6 +148,8 @@ for my $g (qw(lines names emails phones)) {
     $max{$g} = max ( map {scalar @{$_->{$g}}} @metaresult );
 }
 
+google_output();
+
 # Prepare output
 sub format_entry {
     my $entry = shift;
@@ -155,27 +163,80 @@ sub format_entry {
     return \@item;
 }
 
-#@metaresult = sort {scalar @{$b->{names}} cmp scalar @{$a->{names}}} @metaresult;
-#@metaresult = sort {$a->{names}[0] cmp $b->{names}[0]} @metaresult;
-
-$csv->eol ("\r\n");
-open $fh, ">:encoding(UTF16)", "new.csv" or die "new.csv: $!";
-
-# build column names
-my @header;
-for my $g (qw(line name email phone)) {
-    push @header, map {"$g$_"} (0..$max{$g.'s'});
+sub num_type {
+    return "Mobile" if $_[0] =~ /^\+8869/;
+    return "Work" if $_[0] =~ /\@.*\.com/;
+    return "Other";
 }
 
-$csv->print($fh, \@header);
-for my $entry (@metaresult) {
-#    next if $item->[38] == 0 and any { /\@compal\.com/ } @{$item};
-#    next if all { defined $_ && $_ !~ /^\+886/ } @{$item}[39..39+$max[3]];
-#    print @{$item}[39..39+$max[3]];
-    $csv->print ($fh, format_entry($entry));
+sub good_entry {
+    my $entry = shift;
+
+    my %no;
+    for my $g (qw{names emails phones}) {
+        my @gg = @{$entry->{$g}};
+        $no{$g} = (0 == scalar @gg);
+    }
+    return 0 if $no{phones} and $no{names};
+    return 0 if $no{emails} and $no{names};
+    return 0 if $no{phones} and $entry->{emails}[0] =~ /\@compal\.com/;
+    return 0 if $no{phones} and $entry->{emails}[0] eq $entry->{names}[0];
+    return 1;
 }
 
-close $fh or die "new.csv: $!";
+sub format_google_entry {
+    my $entry = shift;
+    my @item = ('') x (1+2*4+2*5);
+
+    $item[0] = $entry->{names}[0];
+    for my $g qw(emails phones) {
+        my %lh;
+        my @gg = @{$entry->{$g}};
+        push @{$lh{num_type($_)}}, $_ for @gg;
+        my $i=0;
+        my $p = $column_of{$g};
+        for my $k (keys %lh) {
+            @item[$p+$i, $p+$i+1] = ($k, join( ' ::: ', @{$lh{$k}} ));
+            $i+=2;
+        }
+    }
+    return \@item;
+}
+    
+sub google_output {
+    $csv->eol ("\r\n");
+    my $fn = "googlenew.csv";
+    open $fh, ">:encoding(UTF16)", $fn or die "$fn: $!";
+
+    my @header = @{$column_names};
+#    push @header, map {("E-mail $_ - Type", "E-mail $_ - Value")} (1..4);
+#    push @header, map {("Phone $_ - Type", "Phone $_ - Value")} (1..5);
+    $csv->print($fh, \@header);
+    for my $entry (@metaresult) {
+        $csv->print ($fh, format_google_entry($entry)) if good_entry($entry);
+    }
+    close $fh or die "$fn: $!";
+}
+
+sub dev_output {
+    $csv->eol ("\r\n");
+    open $fh, ">:encoding(UTF16)", "new.csv" or die "new.csv: $!";
+
+    # build column names
+    my @header;
+    for my $g (qw(line name email phone)) {
+        push @header, map {"$g$_"} (0..$max{$g.'s'});
+    }
+
+    $csv->print($fh, \@header);
+    for my $entry (@metaresult) {
+        #    next if $item->[38] == 0 and any { /\@compal\.com/ } @{$item};
+        #    next if all { defined $_ && $_ !~ /^\+886/ } @{$item}[39..39+$max[3]];
+        #    print @{$item}[39..39+$max[3]];
+        $csv->print ($fh, format_entry($entry)) if good_entry($entry);
+    }
+    close $fh or die "new.csv: $!";
+}
 
 __END__
 
