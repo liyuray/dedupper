@@ -5,6 +5,7 @@ use List::Util qw(min max sum);
 use List::MoreUtils qw(all any uniq);
 use Data::Dumper;
 use Carp;
+use utf8;
 $SIG{__DIE__}  = sub { Carp::confess(@_) };
 $SIG{__WARN__} = sub { Carp::cluck(@_) };
 binmode STDOUT, 'utf8';
@@ -58,7 +59,14 @@ while (my $row = $csv->getline_hr ($fh)) {
         }
         push @phones, @phones_items;
     }
-    my @names = map {$row->{$_}} grep {defined $row->{$_}} @name_fields;
+    my @names =
+        grep {
+            $_ ne ''
+                && $_ !~ /[﹐\?¿‥·'\&¸«½¶¤§¥￥¨¼¾±©®Ä³°À¯²\|´]/
+            }
+            map {$row->{$_}}
+                grep {defined $row->{$_}}
+                    @name_fields;
 
     # each phone number can find it's containing line numbers in %phoneh.
     # each line number can find it's contained phone numbers in %line_hash.
@@ -77,21 +85,15 @@ $csv->eof or $csv->error_diag ();
 close $fh;
 
 my @list;
-#print Dumper($phoneh{'+886932064178'});
-#for my $phone (('+886932064178', keys %phoneh)) {
 
 # Group entries by emails or phone numbers
 my $list_num;
 while ( $line_num = [sort {$a <=> $b} keys %iter]->[0]) {
-#    print "line_num=$line_num";
-    #    delete $iter{$line_num};
     my @entry;
     my %queue;
     $queue{$line_num}++;
     my $i;
     while ($i = [sort {$a <=> $b} keys %queue]->[0]) {
-        #    while ([sort {$a <=> $b} keys %iter]->[0]) {
-        #        print "i=$i";
         delete $queue{$i};
         push @entry, $i;
         delete $iter{$i};
@@ -134,48 +136,36 @@ for my $g (qw(lines names emails phones)) {
 }
 
 # Prepare output
-my @result;
+sub format_entry {
+    my $entry = shift;
+    my $p = 0;
+    my @item = ('') x (4+sum values %max);
+    for my $g qw(lines names emails phones) {
+        my @gg = @{$entry->{$g}};
+        @item[$p .. $p+scalar @gg] = (scalar @gg, @gg);
+        $p+=$max{$g}+1;
+    }
+    return \@item;
+}
+
+#@metaresult = sort {scalar @{$b->{names}} cmp scalar @{$a->{names}}} @metaresult;
+@metaresult = sort {$a->{names}[0] cmp $b->{names}[0]} @metaresult;
+
+$csv->eol ("\r\n");
+open $fh, ">:encoding(UTF16)", "new.csv" or die "new.csv: $!";
 
 # build column names
 my @header;
 for my $g (qw(line name email phone)) {
     push @header, map {"$g$_"} (0..$max{$g.'s'});
 }
-push @result, \@header;
 
-#fill in cells
-for (@metaresult) {
-    my @item = ('') x (4+sum values %max);
-    my $p = 0;
-    for my $g qw(lines names emails phones) {
-        my @gg = @{$_->{$g}};
-        @item[$p .. $p+scalar @gg] = (scalar @gg, @gg);
-        $p+=$max{$g}+1;
-    }
-    push @result, \@item;
-}
-
-
-@result = sort {$b->[0] cmp $a->[0]} @result;
-for my $item (@result) {
-#    next if any { /\@compal\.com/ && $item->[38] == 0} @{$item};
-#    print @{$item};
-}
-
-#print scalar @list;
-#print Dumper(\@list);
-#print Dumper(\%iter);
-
-
-$csv->eol ("\r\n");
-open $fh, ">:encoding(UTF16)", "new.csv" or die "new.csv: $!";
-
-$csv->print($fh, shift @result);
-for my $item (@result) {
+$csv->print($fh, \@header);
+for my $entry (@metaresult) {
 #    next if $item->[38] == 0 and any { /\@compal\.com/ } @{$item};
 #    next if all { defined $_ && $_ !~ /^\+886/ } @{$item}[39..39+$max[3]];
 #    print @{$item}[39..39+$max[3]];
-    $csv->print ($fh, $item);
+    $csv->print ($fh, format_entry($entry));
 }
 
 close $fh or die "new.csv: $!";
