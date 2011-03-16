@@ -9,34 +9,25 @@ $SIG{__DIE__}  = sub { Carp::confess(@_) };
 $SIG{__WARN__} = sub { Carp::cluck(@_) };
 binmode STDOUT, 'utf8';
 
-my @email_fields = map {"E-mail $_ - Value"} (1..4);
-my @phone_fields = map {"Phone $_ - Value"} (1..5);
-my @name_fields = split /\n/, <<'ENDNAME';
-Name
-Given Name
-Additional Name
-Family Name
-Yomi Name
-Given Name Yomi
-Additional Name Yomi
-Family Name Yomi
-Name Prefix
-Name Suffix
-Initials
-Nickname
-Short Name
-Maiden Name
-ENDNAME
-
-
 my @phone_list;
 my @name_list;
 my @rows;
 my $line_num;
+
 my $csv = Text::CSV_XS->new ({ binary => 1, always_quote => 1 })
     or die "Cannot use CSV: ".Text::CSV->error_diag ();
-open my $fh, "<:encoding(utf16-le)", "test.csv" or die "test.csv: $!";
-$csv->column_names ($csv->getline ($fh));
+open my $fh, "<:encoding(UTF-16)", "test.csv" or die "test.csv: $!";
+
+my $column_names = $csv->getline($fh);
+$csv->column_names (@{$column_names});
+
+#print Dumper($column_names);
+#print @{$column_names};
+
+my @email_fields = grep {/E\-mail \d+ \- Value/} @{$column_names};
+my @phone_fields = grep {/Phone \d+ \- Value/} @{$column_names};
+my @name_fields =  grep {/(?:name|initials)/i} @{$column_names};
+
 my %phoneh;
 my %emailh;
 my %line_hash;
@@ -149,7 +140,7 @@ for my $entry (@list) {
     push @phones, @{$line_hash{$_}{phones}} for @{$entry};
     push @emails, @{$line_hash{$_}{emails}} for @{$entry};
     push @names, @{$line_hash{$_}{names}} for @{$entry};
-    #    print scalar @lines, @lines, uniq @names, uniq @emails, uniq @phones;
+
     @names = uniq @names;
     @emails = uniq @emails;
     @phones = uniq @phones;
