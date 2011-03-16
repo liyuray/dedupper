@@ -3,14 +3,13 @@ use strict;
 use Text::CSV_XS;
 use List::MoreUtils qw(all any uniq);
 use Data::Dumper;
-use warnings NONFATAL => 'all', FATAL => 'uninitialized';
 use Carp;
 $SIG{__DIE__}  = sub { Carp::confess(@_) };
 $SIG{__WARN__} = sub { Carp::cluck(@_) };
 binmode STDOUT, 'utf8';
 
-local $, = ',';
-local $\ = $/;
+#local $, = ',';
+#local $\ = $/;
 
 my @email_fields = map {"E-mail $_ - Value"} (1..4);
 my @phone_fields = map {"Phone $_ - Value"} (1..5);
@@ -36,7 +35,7 @@ my @phone_list;
 my @name_list;
 my @rows;
 my $line_num;
-my $csv = Text::CSV_XS->new ({ binary => 1, eol => $/ })
+my $csv = Text::CSV_XS->new ({ binary => 1, always_quote => 1 })
     or die "Cannot use CSV: ".Text::CSV->error_diag ();
 open my $fh, "<:encoding(utf16-le)", "test.csv" or die "test.csv: $!";
 $csv->column_names ($csv->getline ($fh));
@@ -114,27 +113,48 @@ while ( $line_num = [sort {$a <=> $b} keys %iter]->[0]) {
 #        print @queue1;
         $queue{$_}++ for @queue1;
     }
-    push @list, \@entry;
+    push @list, [sort {$a <=> $b} @entry];
 }
 
 my @result;
+my @max;
+push @result, [
+    (map {"line$_"}(0..10)),
+    (map {"name$_"}(0..13)),
+    (map {"email$_"}(0..11)),
+    (map {"phone$_"}(0..10)),
+];
 for my $entry (@list) {
     my (@phones, @emails, @names, @lines);
     @lines = @{$entry};
     push @phones, @{$line_hash{$_}{phones}} for @{$entry};
     push @emails, @{$line_hash{$_}{emails}} for @{$entry};
     push @names, @{$line_hash{$_}{names}} for @{$entry};
-#    print scalar @lines, @lines, uniq @names, uniq @emails, uniq @phones;
-    push @result, [scalar @lines, @lines, uniq @names, uniq @emails, uniq @phones];
+    #    print scalar @lines, @lines, uniq @names, uniq @emails, uniq @phones;
+    @names = uniq @names;
+    @emails = uniq @emails;
+    @phones = uniq @phones;
+    my @count = (scalar @lines, scalar @names, scalar @emails, scalar @phones);
+    push @lines, ('') while scalar @lines < 10;
+    push @names, ('') while scalar @names < 13;
+    push @emails, ('') while scalar @emails < 11;
+    push @phones, ('') while scalar @phones < 10;
+    push @result, [$count[0], @lines, $count[1], @names, $count[2], @emails, $count[3], @phones];
 }
 
 @result = sort {$b->[0] cmp $a->[0]} @result;
 for my $item (@result) {
-    print @{$item};
+#    print @{$item};
 }
 
-print scalar @list;
-print Dumper(\@list);
-print Dumper(\%iter);
+#print scalar @list;
+#print Dumper(\@list);
+#print Dumper(\%iter);
+
+$csv->eol ("\r\n");
+open $fh, ">:encoding(UTF16)", "new.csv" or die "new.csv: $!";
+$csv->print ($fh, $_) for @result;
+close $fh or die "new.csv: $!";
+
 __END__
 
