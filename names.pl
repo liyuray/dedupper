@@ -1,15 +1,13 @@
 use warnings;
 use strict;
 use Text::CSV_XS;
+use List::Util qw(min max);
 use List::MoreUtils qw(all any uniq);
 use Data::Dumper;
 use Carp;
 $SIG{__DIE__}  = sub { Carp::confess(@_) };
 $SIG{__WARN__} = sub { Carp::cluck(@_) };
 binmode STDOUT, 'utf8';
-
-#local $, = ',';
-#local $\ = $/;
 
 my @email_fields = map {"E-mail $_ - Value"} (1..4);
 my @phone_fields = map {"Phone $_ - Value"} (1..5);
@@ -90,6 +88,8 @@ close $fh;
 my @list;
 #print Dumper($phoneh{'+886932064178'});
 #for my $phone (('+886932064178', keys %phoneh)) {
+
+# Group entries by emails or phone numbers
 my $list_num;
 while ( $line_num = [sort {$a <=> $b} keys %iter]->[0]) {
 #    print "line_num=$line_num";
@@ -116,14 +116,33 @@ while ( $line_num = [sort {$a <=> $b} keys %iter]->[0]) {
     push @list, [sort {$a <=> $b} @entry];
 }
 
+# find out max values
+my @max = (0,0,0,0);
+for my $entry (@list) {
+    my (@phones, @emails, @names, @lines);
+    @lines = @{$entry};
+    push @phones, @{$line_hash{$_}{phones}} for @{$entry};
+    push @emails, @{$line_hash{$_}{emails}} for @{$entry};
+    push @names, @{$line_hash{$_}{names}} for @{$entry};
+    @names = uniq @names;
+    @emails = uniq @emails;
+    @phones = uniq @phones;
+    my @count = (scalar @lines, scalar @names, scalar @emails, scalar @phones);
+    $max[$_] = max $max[$_], $count[$_]  for (0..3);
+}
+
+# Prepare output
 my @result;
-my @max;
+
+# build column names
 push @result, [
-    (map {"line$_"}(0..10)),
-    (map {"name$_"}(0..13)),
-    (map {"email$_"}(0..11)),
-    (map {"phone$_"}(0..10)),
+    (map {"line$_"}(0..$max[0])),
+    (map {"name$_"}(0..$max[1])),
+    (map {"email$_"}(0..$max[2])),
+    (map {"phone$_"}(0..$max[3])),
 ];
+
+#fill in cells
 for my $entry (@list) {
     my (@phones, @emails, @names, @lines);
     @lines = @{$entry};
@@ -135,12 +154,13 @@ for my $entry (@list) {
     @emails = uniq @emails;
     @phones = uniq @phones;
     my @count = (scalar @lines, scalar @names, scalar @emails, scalar @phones);
-    push @lines, ('') while scalar @lines < 10;
-    push @names, ('') while scalar @names < 13;
-    push @emails, ('') while scalar @emails < 11;
-    push @phones, ('') while scalar @phones < 10;
+    push @lines, ('') while scalar @lines < $max[0];
+    push @names, ('') while scalar @names < $max[1];
+    push @emails, ('') while scalar @emails < $max[2];
+    push @phones, ('') while scalar @phones < $max[3];
     push @result, [$count[0], @lines, $count[1], @names, $count[2], @emails, $count[3], @phones];
 }
+
 
 @result = sort {$b->[0] cmp $a->[0]} @result;
 for my $item (@result) {
