@@ -1,7 +1,7 @@
 use warnings;
 use strict;
 use Text::CSV_XS;
-use List::Util qw(min max);
+use List::Util qw(min max sum);
 use List::MoreUtils qw(all any uniq);
 use Data::Dumper;
 use Carp;
@@ -107,54 +107,58 @@ while ( $line_num = [sort {$a <=> $b} keys %iter]->[0]) {
     push @list, [sort {$a <=> $b} @entry];
 }
 
-# find out max values
-my @max = (0,0,0,0);
+#fill in metadata
+my @metaresult;
 for my $entry (@list) {
     my (@phones, @emails, @names, @lines);
     @lines = @{$entry};
     push @phones, @{$line_hash{$_}{phones}} for @{$entry};
     push @emails, @{$line_hash{$_}{emails}} for @{$entry};
     push @names, @{$line_hash{$_}{names}} for @{$entry};
+
     @names = uniq @names;
     @emails = uniq @emails;
     @phones = uniq @phones;
-    my @count = (scalar @lines, scalar @names, scalar @emails, scalar @phones);
-    $max[$_] = max $max[$_], $count[$_]  for (0..3);
+    push @metaresult, {
+        lines => \@lines,
+        names => \@names,
+        emails => \@emails,
+        phones => \@phones,
+    };
+}
+
+# find out max values
+my %max;
+for my $g (qw(lines names emails phones)) {
+    $max{$g} = max ( map {scalar @{$_->{$g}}} @metaresult );
 }
 
 # Prepare output
 my @result;
 
 # build column names
-push @result, [
-    (map {"line$_"}(0..$max[0])),
-    (map {"name$_"}(0..$max[1])),
-    (map {"email$_"}(0..$max[2])),
-    (map {"phone$_"}(0..$max[3])),
-];
+my @header;
+for my $g (qw(line name email phone)) {
+    push @header, map {"$g$_"} (0..$max{$g.'s'});
+}
+push @result, \@header;
 
 #fill in cells
-for my $entry (@list) {
-    my (@phones, @emails, @names, @lines);
-    @lines = @{$entry};
-    push @phones, @{$line_hash{$_}{phones}} for @{$entry};
-    push @emails, @{$line_hash{$_}{emails}} for @{$entry};
-    push @names, @{$line_hash{$_}{names}} for @{$entry};
-
-    @names = uniq @names;
-    @emails = uniq @emails;
-    @phones = uniq @phones;
-    my @count = (scalar @lines, scalar @names, scalar @emails, scalar @phones);
-    push @lines, ('') while scalar @lines < $max[0];
-    push @names, ('') while scalar @names < $max[1];
-    push @emails, ('') while scalar @emails < $max[2];
-    push @phones, ('') while scalar @phones < $max[3];
-    push @result, [$count[0], @lines, $count[1], @names, $count[2], @emails, $count[3], @phones];
+for (@metaresult) {
+    my @item = ('') x (4+sum values %max);
+    my $p = 0;
+    for my $g qw(lines names emails phones) {
+        my @gg = @{$_->{$g}};
+        @item[$p .. $p+scalar @gg] = (scalar @gg, @gg);
+        $p+=$max{$g}+1;
+    }
+    push @result, \@item;
 }
 
 
 @result = sort {$b->[0] cmp $a->[0]} @result;
 for my $item (@result) {
+#    next if any { /\@compal\.com/ && $item->[38] == 0} @{$item};
 #    print @{$item};
 }
 
@@ -162,9 +166,18 @@ for my $item (@result) {
 #print Dumper(\@list);
 #print Dumper(\%iter);
 
+
 $csv->eol ("\r\n");
 open $fh, ">:encoding(UTF16)", "new.csv" or die "new.csv: $!";
-$csv->print ($fh, $_) for @result;
+
+$csv->print($fh, shift @result);
+for my $item (@result) {
+#    next if $item->[38] == 0 and any { /\@compal\.com/ } @{$item};
+#    next if all { defined $_ && $_ !~ /^\+886/ } @{$item}[39..39+$max[3]];
+#    print @{$item}[39..39+$max[3]];
+    $csv->print ($fh, $item);
+}
+
 close $fh or die "new.csv: $!";
 
 __END__
