@@ -204,10 +204,11 @@ sub format_google_entry {
 }
     
 sub google_output {
-    $csv->eol ("\r\n");
+    $csv->eol ("\n");
     my $fn = "googlenew.csv";
-    open $fh, ">:encoding(UTF16)", $fn or die "$fn: $!";
-
+#    open $fh, ">:encoding(UTF-16LE)", $fn or die "$fn: $!";
+    open($fh, ">:raw:encoding(UTF-16LE):crlf", $fn) or die "$fn:$!";
+    
     my @header = @{$column_names};
 #    push @header, map {("E-mail $_ - Type", "E-mail $_ - Value")} (1..4);
 #    push @header, map {("Phone $_ - Type", "Phone $_ - Value")} (1..5);
@@ -220,7 +221,7 @@ sub google_output {
 
 sub dev_output {
     $csv->eol ("\r\n");
-    open $fh, ">:encoding(UTF16)", "new.csv" or die "new.csv: $!";
+    open $fh, ">:encoding(UTF-16)", "new.csv" or die "new.csv: $!";
 
     # build column names
     my @header;
